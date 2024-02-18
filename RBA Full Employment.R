@@ -59,15 +59,26 @@ CHART_DATA_1 <- LF_CHART %>%
   mutate(Loosest = max(value),
         Val =value/Loosest-1) %>%
   mutate(Val = ifelse(Val<0,Val*-1,Val)) %>%  
-  mutate(Val = round(Val,1)) %>%
+  mutate(Val = round(Val,2)) %>%
   select(date,series_id,Val) %>% 
   spread(series_id,Val) 
   
   ## Create F table and find the 80-20 numbers
-  Freq_table <- sapply(CHART_DATA_1[,-1],function(x)(table(x)/sum(table(x))))
+  Freq_table <- sapply(CHART_DATA_1[,-1],function(x){
+    
+    tbl1 <- (table(x)/sum(table(x)))
+  
+    
+    
+  })
   
   
-  
+  Freq_table <- lapply(Freq_table,function(tbl){
+    as.data.frame(tbl) %>% 
+    arrange(desc(Freq)) %>% 
+    mutate(V1 =cumsum(Freq))%>% 
+     filter(V1 <= 0.8)  
+  })
   
   
 CHART_DATA_1 <- CHART_DATA_1 %>% 
