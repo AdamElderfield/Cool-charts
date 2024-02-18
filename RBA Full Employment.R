@@ -52,7 +52,7 @@ LF_CHART <- LF %>%
            date >= "2000-01-01") 
 
 
-CHART_DATA_2 <- LF_CHART %>% 
+CHART_DATA_1 <- LF_CHART %>% 
   select(series_id,date,value) %>% 
   group_by(series_id) %>% 
   mutate(Loosest = max(value),
@@ -67,25 +67,29 @@ CHART_DATA_2 <- LF_CHART %>%
   select(-value) %>% 
   filter(date == last(date)) %>% 
   select(-date) %>% 
+   gather(Var,Val, -series_id)
+
+CHART_DATA_1 <- CHART_DATA_1 %>% 
+  spread(Var,Val) %>%
   mutate(series_id = paste(series_id," ",round(Loosest,1))) %>% 
-   gather(Var,Val, -series_id) %>% 
-  group_by(series_id) %>%
+  gather(Var, Val, -series_id) %>% 
   mutate(Val =Val/Val[Var == "Loosest"]-1) %>%
   mutate(Val = ifelse(Val<0,Val*-1,Val)) %>% 
   spread(Var,Val) %>%
- 
   group_by(series_id) %>% 
   mutate(       P20_P80 = P80-P20,
                 Base = P20-Loosest,
                 Top = Tightest-P80,
                 Current = Current-Loosest,
                 Oct_22 = Oct_22-Loosest
-  ) %>%
-  select(series_id,Base,P20_P80,Top) %>% 
-  
-  gather(Var,Val, -series_id) %>% 
-  group_by(series_id) %>% 
-  mutate(Val = Val/sum(Val))
+  ) 
+
+CHART_DATA_2 <- CHART_DATA_1 %>% 
+
+   select(series_id,Base,P20_P80,Top)%>% 
+      gather(Var,Val, -series_id) #%>% 
+#   group_by(series_id) %>% 
+#   mutate(Val = Val/sum(Val))
 
 
 CHART_DATA_Line <- LF_CHART %>% 
@@ -115,12 +119,21 @@ CHART_DATA_Line <- LF_CHART %>%
                 Current = Current-Loosest,
                 Oct_22 = Oct_22-Loosest
   ) %>%
-  select(series_id,Base,P20_P80,Top, Current, Oct_22) %>% 
-  group_by(series_id) %>% 
-  mutate(Current = Current/(Base+P20_P80+Top),
-         Oct_22 = Oct_22/(Base+P20_P80+Top)) %>% 
   
-gather(Var,Val, -series_id) 
+  
+  select(series_id,Base,P20_P80,Top) %>%
+  gather(Var,Val, -series_id) %>%
+  group_by(series_id) %>% 
+#  mutate(Val = Val/sum(Val)) %>% 
+  bind_rows(CHART_DATA_1 %>%
+              gather(Var,Val,-series_id) %>% 
+              filter(Var %in% c("Current","Oct_22"))) %>% 
+  spread(Var, Val) %>% 
+  group_by(series_id) %>% 
+  # mutate(Current = Current/(Base+P20_P80+Top),
+  #        Oct_22 = Oct_22/(Base+P20_P80+Top)) %>% 
+  
+  gather(Var,Val, -series_id) 
   
 
 
