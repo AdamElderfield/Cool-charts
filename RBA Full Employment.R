@@ -55,20 +55,21 @@ LF_CHART <- LF %>%
 CHART_DATA_1 <- LF_CHART %>% 
   select(series_id,date,value) %>% 
   group_by(series_id) %>% 
+  # Normalise data
   mutate(Loosest = max(value),
-         Tightest = min(value),
-         P20 =  quantile(value,c(0.2,.8)) %>%
-           .[[2]],
-         P80 =  quantile(value,c(0.2,.8)) %>%
-           .[[1]],
-                  Current = last(value),
-         Oct_22 = value[which(date=="2022-10-01")]) %>%
+        Val =value/Loosest-1) %>%
+  mutate(Val = ifelse(Val<0,Val*-1,Val)) %>%  
+  mutate(Val = round(Val,1)) %>%
+  select(date,series_id,Val) %>% 
+  spread(series_id,Val) 
   
-  select(-value) %>% 
-  filter(date == last(date)) %>% 
-  select(-date) %>% 
-   gather(Var,Val, -series_id)
-
+  ## Create F table and find the 80-20 numbers
+  Freq_table <- sapply(CHART_DATA_1[,-1],function(x)(table(x)/sum(table(x))))
+  
+  
+  
+  
+  
 CHART_DATA_1 <- CHART_DATA_1 %>% 
   spread(Var,Val) %>%
   mutate(series_id = paste(series_id," ",round(Loosest,1))) %>% 
