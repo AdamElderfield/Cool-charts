@@ -60,26 +60,82 @@ CHART_DATA_1 <- LF_CHART %>%
         Val =value/Loosest-1) %>%
   mutate(Val = ifelse(Val<0,Val*-1,Val)) %>%  
   mutate(Val = round(Val,2)) %>%
-  select(date,series_id,Val) %>% 
-  spread(series_id,Val) 
+  mutate(value = round(value,1)) %>% 
+  select(date,series_id,value) %>% 
+  spread(series_id,value) 
+  
   
   ## Create F table and find the 80-20 numbers
   Freq_table <- sapply(CHART_DATA_1[,-1],function(x){
     
-    tbl1 <- (table(x)/sum(table(x)))
-  
+    brks <- seq(min(x),max(x), by =0.1)
+    
+    tbl1 <- hist(x,breaks = brks, include.lowest = T, plot = F)$counts
+    tbl1 <- tbl1/sum(tbl1)  #(table(x)/sum(table(x)))
+    return(tbl1)
     
     
   })
   
   
   Freq_table <- lapply(Freq_table,function(tbl){
-    as.data.frame(tbl) %>% 
-    arrange(desc(Freq)) %>% 
-    mutate(V1 =cumsum(Freq))%>% 
-     filter(V1 <= 0.8)  
+    as.data.frame(tbl) %>%
+      mutate(CumFreq =cumsum(tbl))
+    
   })
   
+Freq_table_8020 <- lapply(seq_along(Freq_table), function(x){
+  
+  si <- names(Freq_table)[[x]]
+  
+  df <- Freq_table[[x]]
+  
+  df %>% 
+     mutate(P20_P80 =sum(ifelse(CumFreq >.20 & CumFreq <.80,1,0))/nrow(df)) %>% 
+    mutate(P0_20 =sum(ifelse(CumFreq <.20,1,0))/nrow(df)) %>% 
+    mutate(P80_P1 =sum(ifelse(CumFreq >.80,1,0))/nrow(df)) %>% 
+    select(P20_P80, P0_20, P80_P1) %>% 
+    summarise(P20_P80 = last(P20_P80),
+              P0_20 =last(P0_20),
+              P80_P1 = last(P80_P1)) %>% 
+    mutate(series_id = si)
+  
+})  %>% 
+  bind_rows() %>% 
+  gather(Var, Val, -series_id)
+
+
+Oct_22_Current <- CHART_DATA_1 %>%
+  gather(Var, Val, -date) %>% 
+  group_by(Var) %>% 
+  mutate(Oct_22 = Val[date =="2022-10-01"]) %>% 
+  mutate(Latest = last(Val)) %>%
+  select(date, Var, Oct_22, Latest) %>% 
+  gather(Measure,Val,-date, -Var) %>% 
+  spread(Measure, Val) %>% 
+  select(-date) %>% 
+  unique()
+
+Freq_table_current <- sapply(CHART_DATA_1[,-1],function(x){
+  
+  brks <- seq(min(x),max(x), by =0.1)
+  
+  tbl1 <- data.frame(tbl =hist(x,breaks = brks, include.lowest = T, plot = F)$counts,
+                     brks =hist(x,breaks = brks, include.lowest = T, plot = F)$mids)
+  
+  tbl1$tbl <- tbl1$tbl/sum(tbl1$tbl)
+  
+  
+  
+  return(tbl1)
+  
+  
+})
+
+which(Freq_table$A84423050A==Oct_22_Current$Latest[Oct_22_Current$Var == "A84423050A"])
+  
+
+
   
 CHART_DATA_1 <- CHART_DATA_1 %>% 
   spread(Var,Val) %>%
@@ -160,6 +216,13 @@ for(i in seq_along(series_ids)){
 ############
 # Build chart
 ############
+
+ggplot(Freq_table_8020_MinMax)+
+  geom_bar(
+    aes(x = series_id,y=Val, fill = Var), width = 0.15,
+    stat = "identity",
+  )+
+  coord_flip()
 
 
 p <- ggplot(CHART_DATA_2  %>% 
