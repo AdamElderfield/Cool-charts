@@ -66,9 +66,10 @@ CHART_DATA_1 <- LF_CHART %>%
   
   
   ## Create F table and find the 80-20 numbers
-  Freq_table <- sapply(CHART_DATA_1[,-1],function(x){
+  Freq_table <- lapply(CHART_DATA_1[,-1],function(x){
     
     brks <- seq(min(x),max(x), by =0.1)
+    brks <- seq(max(x),min(x), by = (min(x)-max(x))/40)
     
     tbl1 <- hist(x,breaks = brks, include.lowest = T, plot = F)$counts
     tbl1 <- tbl1/sum(tbl1)  #(table(x)/sum(table(x)))
@@ -85,7 +86,7 @@ CHART_DATA_1 <- LF_CHART %>%
   })
   
 Freq_table_8020 <- lapply(seq_along(Freq_table), function(x){
-  
+  x <- 1
   si <- names(Freq_table)[[x]]
   
   df <- Freq_table[[x]]
@@ -116,14 +117,14 @@ Oct_22_Current <- CHART_DATA_1 %>%
   select(-date) %>% 
   unique()
 
-Freq_table_current <- sapply(CHART_DATA_1[,-1],function(x){
+Freq_table_mids <- sapply(CHART_DATA_1[,-1],function(x){
   
-  brks <- seq(min(x),max(x), by =0.1)
+
   
-  tbl1 <- data.frame(tbl =hist(x,breaks = brks, include.lowest = T, plot = F)$counts,
-                     brks =hist(x,breaks = brks, include.lowest = T, plot = F)$mids)
   
-  tbl1$tbl <- tbl1$tbl/sum(tbl1$tbl)
+  brks <- seq(max(x),min(x), by = (min(x)-max(x))/40)
+  
+  tbl1 <- hist(x,breaks = brks, include.lowest = T, plot = F)$mids
   
   
   
@@ -132,10 +133,31 @@ Freq_table_current <- sapply(CHART_DATA_1[,-1],function(x){
   
 })
 
-which(Freq_table$A84423050A==Oct_22_Current$Latest[Oct_22_Current$Var == "A84423050A"])
+Oct_22_current <- list()
+for(i in colnames(Freq_table_mids)){
   
+  position <- which.min(abs((Freq_table_mids[,i]-Oct_22_Current$Oct_22[Oct_22_Current$Var == i])))  # Position of Oct22
+  Oct_22_current[["Oct_22"]][[i]] <- Freq_table[[i]][position,2]
+  Freq_table[[i]] %>% 
+    mutate(Oct_22 =sum(ifelse(CumFreq >.20 & CumFreq <.80,1,0))/nrow(df)) %>% 
+    mutate(P0_20 =sum(ifelse(CumFreq <.20,1,0))/nrow(df)) %>% 
+    mutate(P80_P1 =sum(ifelse(CumFreq >.80,1,0))/nrow(df)) %>% 
+    select(P20_P80, P0_20, P80_P1) %>% 
+    summarise(P20_P80 = last(P20_P80),
+              P0_20 =last(P0_20),
+              P80_P1 = last(P80_P1)) %>% 
+    mutate(series_id = si)
+  
+  position <- which.min(abs((Freq_table_mids[,i]-Oct_22_Current$Latest[Oct_22_Current$Var == i])))  # Position of Oct22
+  Oct_22_current[["Latest"]][[i]] <- Freq_table[[i]][position,2]
+}
 
+Oct_22_current <- Oct_22_current %>% 
+  bind_rows() %>% 
+  mutate(Lines = c("Oct_22","Current"))
 
+Oct_22_current <- Oct_22_current %>% 
+  gather(series_id,Val,-Lines)
   
 CHART_DATA_1 <- CHART_DATA_1 %>% 
   spread(Var,Val) %>%
@@ -217,13 +239,33 @@ for(i in seq_along(series_ids)){
 # Build chart
 ############
 
-ggplot(Freq_table_8020_MinMax)+
+ggplot(Freq_table_8020 %>% 
+         mutate(Var = factor(Var, levels =c("P0_20","P20_P80","P80_P1"))))+
   geom_bar(
     aes(x = series_id,y=Val, fill = Var), width = 0.15,
     stat = "identity",
+  )+coord_flip()+
+ 
+  geom_line(data = Oct_22_current %>% 
+              mutate(Val = 1-Val),
+            aes(
+              x =series_id, y = Val), color = "black" 
   )+
-  coord_flip()
-
+  geom_point(data =Oct_22_current %>% 
+               mutate(Val = 1-Val),
+             aes(
+               x = series_id, y = Val ,
+               group = Lines
+               
+             ),color = c("orange","orange","orange","blue","blue","blue"),
+             shape = c("circle","circle","circle","circle","circle","circle"),
+             size = 4,
+             
+  )+
+  coord_flip()+
+  scale_fill_manual(values = c("white","grey","white"))+theme_rba+
+  title_chart+            # Base plot
+  theme(plot.margin = unit(c(1,3,1,1), "lines"))  
 
 p <- ggplot(CHART_DATA_2  %>% 
       #  filter(series_id == "A85255725J") %>%
